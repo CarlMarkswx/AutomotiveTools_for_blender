@@ -3,12 +3,11 @@ bl_info = {
     "blender": (4, 2, 0),
     "category": "Object",
     "version": (3, 0),
-    "author": "Your Name",
+    "author": "CarlMarksWX",
     "location": "View3D > Sidebar > AT",
     "description": "汽车数据处理工具集",
-    "warning": "",
-    "wiki_url": "",
-    "tracker_url": "",
+    "warning": "本插件无法及时随版本更新，如遇报错请至项目网站查询更新",
+    "github_url": "https://github.com/CarlMarkswx/AutomotiveTools_for_blender/",
 }
 
 import bpy
