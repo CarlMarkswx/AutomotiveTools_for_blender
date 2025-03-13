@@ -2,7 +2,7 @@ bl_info = {
     "name": "Automotive Tools",
     "blender": (4, 2, 0),
     "category": "Object",
-    "version": (3, 0),
+    "version": (1, 1),
     "author": "CarlMarksWX",
     "location": "View3D > Sidebar > AT",
     "description": "汽车数据处理工具集",
@@ -12,6 +12,7 @@ bl_info = {
 
 import bpy
 import bmesh
+from collections import defaultdict
 
 # ---------------------- 核心功能 ----------------------
 class OBJECT_OT_join_with_pregroups(bpy.types.Operator):
@@ -27,13 +28,11 @@ class OBJECT_OT_join_with_pregroups(bpy.types.Operator):
             self.report({'WARNING'}, "请至少选中两个对象！")
             return {'CANCELLED'}
 
-        # 为每个对象创建顶点组
         for obj in selected_objects:
             if obj.type == 'MESH':
                 vg = obj.vertex_groups.new(name=obj.name)
                 vg.add(range(len(obj.data.vertices)), 1.0, 'REPLACE')
 
-        # 执行合并
         bpy.ops.object.join()
         self.report({'INFO'}, "合并完成！顶点组已保留。")
         return {'FINISHED'}
@@ -60,20 +59,19 @@ class OBJECT_OT_select_vertex_group_elements(bpy.types.Operator):
             self.report({'WARNING'}, "没有顶点组数据！")
             return {'CANCELLED'}
 
-        # 收集目标顶点组索引
         target_indices = set()
         select_mode = context.tool_settings.mesh_select_mode
 
-        if select_mode[0]:  # 顶点模式
+        if select_mode[0]:
             for v in bm.verts:
                 if v.select:
                     target_indices.update(v[deform_layer].keys())
-        elif select_mode[1]:  # 边模式
+        elif select_mode[1]:
             for e in bm.edges:
                 if e.select:
                     for v in e.verts:
                         target_indices.update(v[deform_layer].keys())
-        elif select_mode[2]:  # 面模式
+        elif select_mode[2]:
             for f in bm.faces:
                 if f.select:
                     for v in f.verts:
@@ -83,7 +81,6 @@ class OBJECT_OT_select_vertex_group_elements(bpy.types.Operator):
             self.report({'WARNING'}, "未找到关联顶点组！")
             return {'CANCELLED'}
 
-        # 执行选择
         bpy.ops.mesh.select_all(action='DESELECT')
         for vg_idx in target_indices:
             if vg_idx >= len(obj.vertex_groups):
@@ -108,26 +105,19 @@ class OBJECT_OT_split_by_material(bpy.types.Operator):
         return obj and obj.type == 'MESH' and obj.material_slots
 
     def execute(self, context):
-        # 记录原始状态
         original_active = context.active_object
         original_mode = original_active.mode
 
-        # 进入编辑模式（如果不在编辑模式）
         if original_mode != 'EDIT':
             bpy.ops.object.mode_set(mode='EDIT')
 
-        # 执行内置分离操作
         bpy.ops.mesh.separate(type='MATERIAL')
-
-        # 返回对象模式
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        # 恢复原始活动对象（Blender默认会选择新对象，这里重置选择）
         bpy.ops.object.select_all(action='DESELECT')
         original_active.select_set(True)
         context.view_layer.objects.active = original_active
 
-        # 恢复原始模式
         if original_mode == 'EDIT':
             bpy.ops.object.mode_set(mode='EDIT')
 
@@ -147,23 +137,19 @@ class OBJECT_OT_clean_empty_vertex_groups(bpy.types.Operator):
     def execute(self, context):
         total_removed = 0
         
-        # 遍历所有选中对象
         for obj in context.selected_objects:
             if obj.type != 'MESH' or not obj.vertex_groups:
                 continue
 
-            # 使用bmesh高效访问数据
             bm = bmesh.new()
             bm.from_mesh(obj.data)
             deform_layer = bm.verts.layers.deform.active
             used_groups = set()
 
-            # 收集使用的顶点组索引
             if deform_layer:
                 for v in bm.verts:
                     used_groups.update(v[deform_layer].keys())
 
-            # 反向遍历删除空组
             removed = 0
             for vg in reversed(obj.vertex_groups):
                 if vg.index not in used_groups:
@@ -172,9 +158,114 @@ class OBJECT_OT_clean_empty_vertex_groups(bpy.types.Operator):
 
             bm.free()
             total_removed += removed
-            print(f"对象 {obj.name} 移除了 {removed} 个空顶点组")
 
         self.report({'INFO'}, f"总计清理 {total_removed} 个空顶点组")
+        return {'FINISHED'}
+    
+class OBJECT_OT_rename_to_collection(bpy.types.Operator):
+    """将选中物体及其数据按所属集合重命名"""
+    bl_idname = "object.rename_to_collection"
+    bl_label = "按集合重命名"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    @classmethod
+    def poll(cls, context):
+        return context.selected_objects
+
+    def execute(self, context):
+        collection_groups = defaultdict(list)
+        renamed_count = 0
+
+        for obj in context.selected_objects:
+            if obj.users_collection:
+                coll_name = obj.users_collection[0].name
+            else:
+                coll_name = "未分类"
+            collection_groups[coll_name].append(obj)
+
+        for coll_name, objs in collection_groups.items():
+            for idx, obj in enumerate(objs, 1):
+                new_name = f"{coll_name}_{idx:03d}"
+                
+                try:
+                    if obj.data:
+                        if obj.data.users > 1:
+                            obj.data = obj.data.copy()
+                        obj.data.name = new_name
+                    
+                    obj.name = new_name
+                    renamed_count += 1
+                except Exception as e:
+                    self.report({'ERROR'}, f"重命名失败: {str(e)}")
+                    continue
+
+        self.report({'INFO'}, f"成功重命名 {renamed_count} 个物体")
+        return {'FINISHED'}
+
+class OBJECT_OT_select_non_uniform_scale(bpy.types.Operator):
+    """选择所有缩放值不等于1的物体"""
+    bl_idname = "object.select_non_uniform_scale"
+    bl_label = "选择非常规缩放"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    tolerance: bpy.props.FloatProperty(
+        name="容差",
+        default=0.001,
+        min=0.0001,
+        max=1.0,
+        description="允许的误差范围"
+    )
+
+    @classmethod
+    def poll(cls, context):
+        return context.mode == 'OBJECT'
+
+    def execute(self, context):
+        for obj in context.view_layer.objects:
+            obj.select_set(False)
+
+        selected_count = 0
+        
+        for obj in context.scene.objects:
+            if (abs(obj.scale.x - 1.0) > self.tolerance or 
+                abs(obj.scale.y - 1.0) > self.tolerance or 
+                abs(obj.scale.z - 1.0) > self.tolerance):
+                
+                obj.select_set(True)
+                selected_count += 1
+
+        self.report({'INFO'}, f"已选择 {selected_count} 个非常规缩放物体")
+        return {'FINISHED'}
+
+class OBJECT_OT_triangulate_objects(bpy.types.Operator):
+    """为所有选中物体添加三角化修改器"""
+    bl_idname = "object.triangulate_objects"
+    bl_label = "添加三角化"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        for obj in context.selected_objects:
+            if obj.type == 'MESH':
+                modifier = obj.modifiers.new(name="Triangulate", type='TRIANGULATE')
+                modifier.keep_normals = True
+        self.report({'INFO'}, "已添加三角化修改器")
+        return {'FINISHED'}
+
+class OBJECT_OT_remove_triangulate(bpy.types.Operator):
+    """删除所有三角化修改器"""
+    bl_idname = "object.remove_triangulate"
+    bl_label = "删除三角化"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        removed_count = 0
+        for obj in context.selected_objects:
+            if obj.type == 'MESH':
+                for mod in reversed(obj.modifiers):
+                    if mod.type == 'TRIANGULATE':
+                        obj.modifiers.remove(mod)
+                        removed_count += 1
+        self.report({'INFO'}, f"已删除 {removed_count} 个三角化修改器")
         return {'FINISHED'}
 
 # ---------------------- 用户界面 ----------------------
@@ -187,22 +278,40 @@ class VIEW3D_PT_join_tools(bpy.types.Panel):
 
     def draw(self, context):
         layout = self.layout
-        col = layout.column(align=True)
         
-        # 合并功能
-        col.label(text="合并工具:")
-        col.operator(OBJECT_OT_join_with_pregroups.bl_idname, icon='GROUP_VERTEX')
+        # ========== 数据处理 ==========
+        main_box = layout.box()
+        main_box.label(text="数据处理", icon='TOOL_SETTINGS')
         
-        # 选择功能
-        col.separator()
-        col.label(text="选择工具:")
-        col.operator(OBJECT_OT_select_vertex_group_elements.bl_idname, icon='SELECT_SET')
+        # 模型操作
+        model_box = main_box.box()
+        model_box.label(text="模型操作", icon='MESH_DATA')
+        col = model_box.column(align=True)
+        col.operator(OBJECT_OT_join_with_pregroups.bl_idname, icon='AUTOMERGE_ON')
+        col.operator(OBJECT_OT_select_vertex_group_elements.bl_idname, icon='GROUP_VERTEX')
+        col.operator(OBJECT_OT_clean_empty_vertex_groups.bl_idname, icon='BRUSH_DATA')
+
+        # 材质操作
+        mat_box = main_box.box()
+        mat_box.label(text="材质操作", icon='MATERIAL')
+        mat_box.operator(OBJECT_OT_split_by_material.bl_idname, icon='MOD_EXPLODE')
+
+        # ========== 导出前检查 ==========
+        export_box = layout.box()
+        export_box.label(text="导出前检查", icon='EXPORT')
         
-        # 分离与清理
-        col.separator()
-        col.label(text="优化工具:")
-        col.operator(OBJECT_OT_split_by_material.bl_idname, icon='MATERIAL_DATA')
-        col.operator(OBJECT_OT_clean_empty_vertex_groups.bl_idname, icon='TRASH')
+        # 检查工具
+        check_box = export_box.box()
+        check_box.label(text="模型检查", icon='VIEWZOOM')
+        check_box.operator(OBJECT_OT_select_non_uniform_scale.bl_idname, icon='CON_SIZELIKE')
+
+        # 优化工具
+        optimize_box = export_box.box()
+        optimize_box.label(text="导出优化", icon='MODIFIER')
+        col = optimize_box.column(align=True)
+        col.operator(OBJECT_OT_rename_to_collection.bl_idname, icon='OUTLINER_COLLECTION')
+        col.operator(OBJECT_OT_triangulate_objects.bl_idname, icon='MOD_TRIANGULATE')
+        col.operator(OBJECT_OT_remove_triangulate.bl_idname, icon='X')
 
 # ---------------------- 注册 ----------------------
 classes = (
@@ -210,6 +319,10 @@ classes = (
     OBJECT_OT_select_vertex_group_elements,
     OBJECT_OT_split_by_material,
     OBJECT_OT_clean_empty_vertex_groups,
+    OBJECT_OT_select_non_uniform_scale,
+    OBJECT_OT_rename_to_collection,
+    OBJECT_OT_triangulate_objects,
+    OBJECT_OT_remove_triangulate,
     VIEW3D_PT_join_tools,
 )
 
