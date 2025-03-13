@@ -28,3 +28,15 @@ A Blender plugin designed for automotive industry practitioners, designed to mak
 ### Clean up empty vertex groups 清理空顶点组
 
 清理所有所选物体的空顶点组
+
+### Select non uniform scale 选择非常规缩放
+
+选择缩放不为1的物体，作为导出前的检查项
+
+### Rename to collection 按集合重命名
+
+将选中物体及其数据按所属集合重命名，用于解决datasmith等导出后数据命名超过windows系统最大限制而报错的问题
+
+### Triangulate objects 三角化
+
+为所有选中物体添加三角化修改器，用于解决datasmith导出后平滑组被破坏的问题
