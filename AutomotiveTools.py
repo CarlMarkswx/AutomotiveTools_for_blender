@@ -267,7 +267,59 @@ class OBJECT_OT_remove_triangulate(bpy.types.Operator):
                         removed_count += 1
         self.report({'INFO'}, f"已删除 {removed_count} 个三角化修改器")
         return {'FINISHED'}
+    
+class OBJECT_OT_clear_custom_normals(bpy.types.Operator):
+    """清除自定义拆边法线数据"""
+    bl_idname = "object.clear_custom_normals"
+    bl_label = "清除拆边法线"
+    bl_options = {'REGISTER', 'UNDO'}
 
+    @classmethod
+    def poll(cls, context):
+        return any(obj.type == 'MESH' for obj in context.selected_objects)
+
+    def execute(self, context):
+        cleared_count = 0
+        original_active = context.active_object
+        selected_objects = context.selected_objects.copy()
+
+        # 使用临时上下文覆盖进行批量处理
+        for obj in selected_objects:
+            if obj.type != 'MESH':
+                continue
+
+            try:
+                # 创建临时上下文
+                override = {
+                    'active_object': obj,
+                    'object': obj,
+                    'selected_objects': [obj]
+                }
+                
+                # 直接调用清除操作符
+                with context.temp_override(**override):
+                    bpy.ops.mesh.customdata_custom_splitnormals_clear()
+                
+                cleared_count += 1
+                
+                # 兼容处理：清除残留数据
+                if hasattr(obj.data, "use_auto_smooth"):
+                    obj.data.use_auto_smooth = False
+                if hasattr(obj.data, "has_custom_normals"):
+                    obj.data.has_custom_normals = False
+
+            except Exception as e:
+                self.report({'WARNING'}, f"处理 {obj.name} 失败: {str(e)}")
+                continue
+
+        # 恢复原始上下文
+        context.view_layer.objects.active = original_active
+        for obj in selected_objects:
+            obj.select_set(True)
+
+        self.report({'INFO'}, f"已清除 {cleared_count}/{len(selected_objects)} 个物体的拆边法线")
+        return {'FINISHED'}
+    
 # ---------------------- 用户界面 ----------------------
 class VIEW3D_PT_join_tools(bpy.types.Panel):
     bl_label = "Automotive Tools"
@@ -290,6 +342,7 @@ class VIEW3D_PT_join_tools(bpy.types.Panel):
         col.operator(OBJECT_OT_join_with_pregroups.bl_idname, icon='AUTOMERGE_ON')
         col.operator(OBJECT_OT_select_vertex_group_elements.bl_idname, icon='GROUP_VERTEX')
         col.operator(OBJECT_OT_clean_empty_vertex_groups.bl_idname, icon='BRUSH_DATA')
+        col.operator(OBJECT_OT_clear_custom_normals.bl_idname, icon='NORMALS_VERTEX_FACE')  # 新增按钮
 
         # 材质操作
         mat_box = main_box.box()
@@ -312,7 +365,7 @@ class VIEW3D_PT_join_tools(bpy.types.Panel):
         col.operator(OBJECT_OT_rename_to_collection.bl_idname, icon='OUTLINER_COLLECTION')
         col.operator(OBJECT_OT_triangulate_objects.bl_idname, icon='MOD_TRIANGULATE')
         col.operator(OBJECT_OT_remove_triangulate.bl_idname, icon='X')
-
+        
 # ---------------------- 注册 ----------------------
 classes = (
     OBJECT_OT_join_with_pregroups,
@@ -323,6 +376,7 @@ classes = (
     OBJECT_OT_rename_to_collection,
     OBJECT_OT_triangulate_objects,
     OBJECT_OT_remove_triangulate,
+    OBJECT_OT_clear_custom_normals,
     VIEW3D_PT_join_tools,
 )
 
