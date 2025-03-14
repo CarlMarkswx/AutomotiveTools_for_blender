@@ -257,7 +257,7 @@ class OBJECT_OT_triangulate_objects(bpy.types.Operator):
         for obj in context.selected_objects:
             if obj.type == 'MESH':
                 modifier = obj.modifiers.new(name="Triangulate", type='TRIANGULATE')
-                modifier.keep_normals = True
+                modifier.keep_custom_normals = True
         self.report({'INFO'}, "已添加三角化修改器")
         return {'FINISHED'}
 
