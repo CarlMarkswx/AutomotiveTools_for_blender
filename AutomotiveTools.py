@@ -38,9 +38,9 @@ class OBJECT_OT_join_with_pregroups(bpy.types.Operator):
         return {'FINISHED'}
 
 class OBJECT_OT_select_vertex_group_elements(bpy.types.Operator):
-    """根据顶点组选择元素"""
+    """根据顶点组选择面"""
     bl_idname = "object.select_vertex_group_elements"
-    bl_label = "选择顶点组元素"
+    bl_label = "选择顶点组面"
     bl_options = {'REGISTER', 'UNDO'}
 
     @classmethod
@@ -62,6 +62,7 @@ class OBJECT_OT_select_vertex_group_elements(bpy.types.Operator):
         target_indices = set()
         select_mode = context.tool_settings.mesh_select_mode
 
+        # 根据不同的选择模式，获取选中元素所属的顶点组索引
         if select_mode[0]:
             for v in bm.verts:
                 if v.select:
@@ -81,17 +82,26 @@ class OBJECT_OT_select_vertex_group_elements(bpy.types.Operator):
             self.report({'WARNING'}, "未找到关联顶点组！")
             return {'CANCELLED'}
 
+        # 筛选出合法的顶点组索引（防止因权重数据异常而超出范围）
+        target_indices = {vg_idx for vg_idx in target_indices if vg_idx < len(obj.vertex_groups)}
+
         bpy.ops.mesh.select_all(action='DESELECT')
-        for vg_idx in target_indices:
-            if vg_idx >= len(obj.vertex_groups):
-                continue
-            for v in bm.verts:
-                if vg_idx in v[deform_layer]:
-                    v.select = True
+        # 遍历所有面，检查是否存在一个目标顶点组，使得面上所有顶点均属于该顶点组
+        for f in bm.faces:
+            for vg_idx in target_indices:
+                if all(vg_idx in v[deform_layer] for v in f.verts):
+                    f.select = True
+                    break  # 一个顶点组满足条件即可
 
         bmesh.update_edit_mesh(obj.data)
-        self.report({'INFO'}, f"已选择 {len(target_indices)} 个顶点组的顶点")
+        self.report({'INFO'}, f"已选择 {len(target_indices)} 个顶点组对应的面")
         return {'FINISHED'}
+
+def register():
+    bpy.utils.register_class(OBJECT_OT_select_vertex_group_elements)
+
+def unregister():
+    bpy.utils.unregister_class(OBJECT_OT_select_vertex_group_elements)
 
 class OBJECT_OT_split_by_material(bpy.types.Operator):
     """按材质分离对象"""
