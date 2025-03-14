@@ -29,6 +29,10 @@ A Blender plugin designed for automotive industry practitioners, designed to mak
 
 清理所有所选物体的空顶点组
 
+### Clean Custom Normal Data 清理自定义法线
+
+对于特定的布线正确而自定义法线有瑕疵的模型，可以快速清除选择物体的自定义法线数据
+
 ### Select non uniform scale 选择非常规缩放
 
 选择缩放不为1的物体，作为导出前的检查项
