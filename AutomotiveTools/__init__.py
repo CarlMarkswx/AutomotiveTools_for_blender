@@ -1,8 +1,8 @@
 bl_info = {
     "name": "Automotive Tools",
-    "blender": (4, 2, 0),
+    "blender": (4, 5, 0),
     "category": "Object",
-    "version": (1, 1),
+    "version": (1, 2),
     "author": "CarlMarksWX",
     "location": "View3D > Sidebar > AT",
     "description": "汽车数据处理工具集",
@@ -521,4 +521,5 @@ def unregister():
         bpy.utils.unregister_class(cls)
 
 if __name__ == "__main__":
+
     register()
