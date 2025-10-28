@@ -370,6 +370,70 @@ class OBJECT_OT_select_multi_material(bpy.types.Operator):
 
         self.report({'INFO'}, f"已选中 {selected_count} 个多材质物体")
         return {'FINISHED'}
+    
+class OBJECT_OT_empty_to_collection(bpy.types.Operator):
+    """根据物体名称创建并移动到对应的 Collection"""
+    bl_idname = "object.empty_to_collection"
+    bl_label = "空物体转 Collection"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        moved = 0
+        for obj in bpy.data.objects:
+            if "_" in obj.name:
+                parts = obj.name.split("_")
+                if parts[-1].isdigit():
+                    col_name = "_".join(parts[:-1])
+                else:
+                    col_name = obj.name
+                if col_name in bpy.data.collections:
+                    col = bpy.data.collections[col_name]
+                else:
+                    col = bpy.data.collections.new(col_name)
+                    context.scene.collection.children.link(col)
+                for c in obj.users_collection:
+                    c.objects.unlink(obj)
+                col.objects.link(obj)
+                moved += 1
+        self.report({'INFO'}, f"已整理 {moved} 个物体到 Collection。")
+        return {'FINISHED'}
+
+class OBJECT_OT_merge_duplicate_materials(bpy.types.Operator):
+    """自动合并名称重复的材质（如 material.001 → material）"""
+    bl_idname = "object.merge_duplicate_materials"
+    bl_label = "合并重复材质"
+    bl_options = {'REGISTER', 'UNDO'}
+
+    def execute(self, context):
+        dup_pattern = re.compile(r"^(.*)\.(\d+)$")
+        all_mats = list(bpy.data.materials)
+        base_to_dups = {}
+
+        for mat in all_mats:
+            match = dup_pattern.match(mat.name)
+            if match:
+                base_name = match.group(1)
+                base_to_dups.setdefault(base_name, []).append(mat)
+
+        to_remove = []
+        for base_name, dups in base_to_dups.items():
+            if base_name not in bpy.data.materials:
+                continue
+            base_mat = bpy.data.materials[base_name]
+            for dup_mat in dups:
+                for obj in bpy.data.objects:
+                    if not hasattr(obj.data, "materials"):
+                        continue
+                    for slot in obj.material_slots:
+                        if slot.material == dup_mat:
+                            slot.material = base_mat
+                to_remove.append(dup_mat.name)
+        for mat_name in to_remove:
+            if mat_name in bpy.data.materials:
+                bpy.data.materials.remove(bpy.data.materials[mat_name])
+        self.report({'INFO'}, f"已合并 {len(to_remove)} 个重复材质。")
+        return {'FINISHED'}
+
 
 # ---------------------- 用户界面 ----------------------
 class VIEW3D_PT_join_tools(bpy.types.Panel):
@@ -390,18 +454,20 @@ class VIEW3D_PT_join_tools(bpy.types.Panel):
         model_box = main_box.box()
         model_box.label(text="模型操作", icon='MESH_DATA')
         col = model_box.column(align=True)
+        col.operator(OBJECT_OT_empty_to_collection.bl_idname, icon='OUTLINER_OB_EMPTY')
         col.operator(OBJECT_OT_join_with_pregroups.bl_idname, icon='AUTOMERGE_ON')
         col.operator(OBJECT_OT_select_vertex_group_elements.bl_idname, icon='GROUP_VERTEX')
         col.operator(OBJECT_OT_clean_empty_vertex_groups.bl_idname, icon='BRUSH_DATA')
-        col.operator(OBJECT_OT_clear_custom_normals.bl_idname, icon='NORMALS_VERTEX_FACE')  # 新增按钮
+        col.operator(OBJECT_OT_clear_custom_normals.bl_idname, icon='NORMALS_VERTEX_FACE')
 
         # 材质操作
         mat_box = main_box.box()
         mat_box.label(text="材质操作", icon='MATERIAL')
         mat_col = mat_box.column(align=True)
+        mat_col.operator(OBJECT_OT_merge_duplicate_materials.bl_idname, icon='NODE_MATERIAL')
         mat_col.operator(OBJECT_OT_split_by_material.bl_idname, icon='MOD_EXPLODE')
-        mat_col.operator(OBJECT_OT_select_multi_material.bl_idname, icon='MATERIAL_DATA')  # 新增按钮
-        mat_col.prop(context.scene, 'at_multi_material_threshold', slider=True)  # 添加阈值控制
+        mat_col.operator(OBJECT_OT_select_multi_material.bl_idname, icon='MATERIAL_DATA')
+        mat_col.prop(context.scene, 'at_multi_material_threshold', slider=True)
 
         # ========== 导出前检查 ==========
         export_box = layout.box()
@@ -432,6 +498,8 @@ classes = (
     OBJECT_OT_remove_triangulate,
     OBJECT_OT_clear_custom_normals,
     OBJECT_OT_select_multi_material,
+    OBJECT_OT_empty_to_collection,
+    OBJECT_OT_merge_duplicate_materials,
     VIEW3D_PT_join_tools,
 )
 
