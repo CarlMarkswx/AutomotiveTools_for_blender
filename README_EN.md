@@ -1,7 +1,7 @@
 # 🚗 Automotive Tools – Blender Toolkit for Automotive Data Processing
 
 > 🇨🇳 **中文版本请点击这里查看：** [返回中文说明文档](./README.md)  
-> 📦 Current version: **v1.2** | Compatible with **Blender 4.0+**
+> 📦 Current version: **v1.2** | Compatible with **Blender 4.5**
 
 ---
 
