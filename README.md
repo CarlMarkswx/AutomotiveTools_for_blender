@@ -33,7 +33,7 @@
 * **空物体转 Collection**: 将空物体的父子层级结构转换为 Collection 嵌套结构。空物体将被删除，其内容物将移入新的 Collection 中。  
 * **自动编组**: 根据物体名称将其组织到 Collection 中。提供两种模式：  
   * **简单模式**: 创建以物体名称第一部分命名的单层 Collection（例如，`Hood_40` → `Hood`）。  
-  * **复杂模式**: 根据物体名称部分创建嵌套 Collection 结构（例如，`Rear_Spoiler_02` → `Rear` → `Rear_Spoiler`）。  
+  * **复杂模式**: 根据物体名称部分创建嵌套 Collection 结构（例如，`Rear_Spoiler_02` → `Spoiler` - `Rear`）。  
 * **清理空集合**: 手动移除场景中所有空的 Collection。
 
 ---
